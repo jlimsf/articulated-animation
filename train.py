@@ -61,7 +61,7 @@ def train(config, generator, region_predictor, bg_predictor, checkpoint, log_dir
         for epoch in trange(start_epoch, train_params['num_epochs']):
 
             for x in dataloader:
-
+                '''
                 if ((total_iters+1) % 2) == 0:
                     save_latest_ckpts({'generator': generator,
                                              'bg_predictor': bg_predictor,
@@ -72,7 +72,7 @@ def train(config, generator, region_predictor, bg_predictor, checkpoint, log_dir
                                              train_mode = 'reconstruction',
                                              epoch = epoch)
 
-
+                '''
                 losses, generated = model(x)
                 loss_values = [val.mean() for val in losses.values()]
                 loss = sum(loss_values)

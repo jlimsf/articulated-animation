@@ -1,5 +1,5 @@
-CUDA_VISIBLE_DEVICES=0,1,2 python run.py \
-          --checkpoint '/Users/john.lim/Downloads/00000099-cpk-reconstruction.pth' \
+CUDA_VISIBLE_DEVICES=0 python run.py \
+          --checkpoint 'log/fashion 16_06_21_00.46.15/00000029-cpk-reconstruction.pth' \
           --config 'config/fashion.yaml' \
-          --device_ids 0,1,2 \
+          --device_ids 0 \
           --mode train_avd

@@ -123,20 +123,20 @@ def main(opt):
     reader = imageio.get_reader(opt.driving_video)
     fps = reader.get_meta_data()['fps']
     reader.close()
-    # driving_video = imageio.mimread(opt.driving_video, memtest=False)
+    driving_video = imageio.mimread(opt.driving_video, memtest=False)
 
     source_image = resize(source_image, opt.img_shape)[..., :3]
-    # driving_video = [resize(frame, opt.img_shape)[..., :3] for frame in driving_video]
+    driving_video = [resize(frame, opt.img_shape)[..., :3] for frame in driving_video]
     # with open('driving_video.pickle', 'wb') as f:
         # pickle.dump(driving_video, f)
 
-    with open('driving_video.pickle', 'rb') as f:
-        driving_video = pickle.load(f)
+    #with open('driving_video.pickle', 'rb') as f:
+    #    driving_video = pickle.load(f)
 
     generator, region_predictor, avd_network = load_checkpoints(config_path=opt.config,
                                                                 checkpoint_path=opt.checkpoint, cpu=opt.cpu)
     predictions = make_animation(source_image, driving_video, generator, region_predictor, avd_network,
-                                 animation_mode='avd', cpu=opt.cpu)
+                                 animation_mode='standard', cpu=opt.cpu)
     imageio.mimsave(opt.result_video, [img_as_ubyte(frame) for frame in predictions], fps=fps)
 
 

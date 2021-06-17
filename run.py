@@ -72,6 +72,7 @@ if __name__ == "__main__":
                                        num_channels=config['model_params']['num_channels'],
                                        estimate_affine=config['model_params']['estimate_affine'],
                                        **config['model_params']['region_predictor_params'])
+    
 
     if torch.cuda.is_available():
         region_predictor.to(opt.device_ids[0])
@@ -81,7 +82,6 @@ if __name__ == "__main__":
 
     bg_predictor = BGMotionPredictor(num_channels=config['model_params']['num_channels'],
                                      **config['model_params']['bg_predictor_params'])
-    
     if torch.cuda.is_available():
         bg_predictor.to(opt.device_ids[0])
     if opt.verbose:
