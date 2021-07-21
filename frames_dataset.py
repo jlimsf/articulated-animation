@@ -21,7 +21,9 @@ import pandas as pd
 from augmentation import AllAugmentationTransform
 import glob
 from functools import partial
-
+import torch
+from PIL import Image
+import random
 
 def read_video(name, frame_shape):
     """
@@ -102,7 +104,6 @@ class FramesDataset(Dataset):
         else:
             print("Use random train-test split.")
             train_videos, test_videos = train_test_split(self.videos, random_state=random_seed, test_size=0.2)
-
         if is_train:
             self.videos = train_videos
         else:
@@ -114,7 +115,9 @@ class FramesDataset(Dataset):
             self.transform = AllAugmentationTransform(**augmentation_params)
         else:
             self.transform = None
-        
+
+
+
 
     def __len__(self):
         return len(self.videos)
@@ -133,8 +136,10 @@ class FramesDataset(Dataset):
 
         video_name = os.path.basename(path)
 
+
         if self.is_train and os.path.isdir(path):
             frames = os.listdir(path)
+
             num_frames = len(frames)
             frame_idx = np.sort(np.random.choice(num_frames, replace=True, size=2))
 
@@ -233,3 +238,229 @@ class PairedDataset(Dataset):
         second = {'source_' + key: value for key, value in second.items()}
 
         return {**first, **second}
+
+class CustomerDataset(Dataset):
+    def __init__(self, root_dir, is_train=True, is_ubc=False,
+                 transforms=None):
+
+        self.is_train = is_train
+        self.is_ubc = is_ubc
+        self.root_dir = root_dir
+
+        self.transform = transforms
+
+        if self.is_ubc:
+            self.images = []
+            for vid in os.listdir(self.root_dir):
+                vid_fp = os.path.join(self.root_dir, vid)
+                for frame in os.listdir(vid_fp):
+                    im_fp = os.path.join(vid_fp, frame)
+                    self.images.append(im_fp)
+        else:
+            # self.images = [os.path.join(self.root_dir, x) for x in os.listdir(self.root_dir) ]
+            self.images = []
+            for x in os.listdir(self.root_dir):
+                im_fp = os.path.join(self.root_dir, x)
+                # if not x == 'abby-rebeccataylor--0b4f817e75f778121ac8051a0cd470d0.jpg':
+                #     continue
+                # else:
+                #     self.images.append(im_fp)
+                self.images.append(im_fp)
+
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+
+        src_name = self.images[idx]
+        tgt_name = src_name
+        # tgt_name = random.sample(self.images, 1)[0]
+
+        out = {}
+        if self.transform:
+            src_tensor = self.transform(Image.open(src_name))
+            tgt_tensor = self.transform(Image.open(tgt_name))
+        else:
+            raise NotImplementedError
+
+        if self.is_train:
+            source = np.array(src_tensor, dtype='float32')
+            driving = np.array(tgt_tensor, dtype='float32')
+
+        else:
+            raise NotImplementedError
+            #frame = np.array(frame_array, dtype='float32')
+            #out['video'] = video.transpose((3, 0, 1, 2))
+        out['name'] = src_name
+        out['id'] = idx
+        out['driving'] = driving
+        out['source'] = source
+
+        return out
+
+class MultiViewFramesDataset(Dataset):
+    """
+    Dataset of videos, each video can be represented as:
+      - an image of concatenated frames
+      - '.mp4' or '.gif'
+      - folder with all frames
+    """
+
+    def __init__(self, root_dir, frame_shape=(256, 256, 3), id_sampling=False, is_train=True,
+                 random_seed=0, pairs_list=None, augmentation_params=None, N_views=1):
+        self.root_dir = root_dir
+        self.videos = os.listdir(root_dir)
+        self.frame_shape = frame_shape
+        self.pairs_list = pairs_list
+        self.id_sampling = id_sampling
+        if os.path.exists(os.path.join(root_dir, 'train')):
+            assert os.path.exists(os.path.join(root_dir, 'test'))
+            print("Use predefined train-test split.")
+            if id_sampling:
+                train_videos = {os.path.basename(video).split('#')[0] for video in
+                                os.listdir(os.path.join(root_dir, 'train'))}
+                train_videos = list(train_videos)
+            else:
+                train_videos = os.listdir(os.path.join(root_dir, 'train'))
+            test_videos = os.listdir(os.path.join(root_dir, 'test'))
+            self.root_dir = os.path.join(self.root_dir, 'train' if is_train else 'test')
+        else:
+            print("Use random train-test split.")
+            train_videos, test_videos = train_test_split(self.videos, random_state=random_seed, test_size=0.2)
+        if is_train:
+            self.videos = train_videos
+        else:
+            self.videos = test_videos
+
+        self.is_train = is_train
+
+        if self.is_train:
+            self.transform = AllAugmentationTransform(**augmentation_params)
+        else:
+            self.transform = None
+
+        self.N_views = N_views
+
+
+    def __len__(self):
+        return len(self.videos)
+
+    def __getitem__(self, idx):
+        if self.is_train and self.id_sampling:
+            name = self.videos[idx]
+            try:
+                path = np.random.choice(glob.glob(os.path.join(self.root_dir, name + '*.mp4')))
+            except ValueError:
+                raise ValueError("File formatting is not correct for id_sampling=True. "
+                                 "Change file formatting, or set id_sampling=False.")
+        else:
+            name = self.videos[idx]
+            path = os.path.join(self.root_dir, name)
+
+        video_name = os.path.basename(path)
+
+
+        if self.is_train and os.path.isdir(path):
+            frames = os.listdir(path)
+
+            num_frames = len(frames)
+
+            if self.N_views > 1:
+                num_views = self.N_views + 1
+            else:
+                num_views = 2
+
+            frame_idx = np.sort(np.random.choice(num_frames, replace=True, size=num_views))
+
+            if self.frame_shape is not None:
+                resize_fn = partial(resize, output_shape=self.frame_shape)
+            else:
+                resize_fn = img_as_float32
+
+            if type(frames[0]) is bytes:
+                video_array = [resize_fn(io.imread(os.path.join(path, frames[idx].decode('utf-8')))) for idx in
+                               frame_idx]
+            else:
+                video_array = [resize_fn(io.imread(os.path.join(path, frames[idx]))) for idx in frame_idx]
+
+        else:
+            video_array = read_video(path, frame_shape=self.frame_shape)
+            num_frames = len(video_array)
+            frame_idx = np.sort(np.random.choice(num_frames, replace=True, size=2)) if self.is_train else range(
+                num_frames)
+            video_array = video_array[frame_idx][..., :3]
+
+        if self.transform is not None:
+            video_array = self.transform(video_array)
+
+        out = {}
+
+        if self.is_train:
+            if self.N_views == 1:
+                source = np.array(video_array[0], dtype='float32')
+                driving = np.array(video_array[1], dtype='float32')
+
+                out['driving'] = driving.transpose((2, 0, 1))
+                out['source'] = source.transpose((2, 0, 1))
+            else:
+                # source = np.array(video_array[0], dtype='float32')
+                source = np.array(video_array[0], dtype='float32')
+                driving = np.array(video_array[-1], dtype='float32')
+                views = [np.array(video_array[i], dtype='float32') for i in range(1, len(video_array)-1)]
+
+                out['driving'] = driving.transpose((2, 0, 1))
+                out['source'] =  source.transpose((2, 0, 1))
+                out['views'] = [x.transpose((2,0,1)) for x in views ]
+                
+        else:
+            video = np.array(video_array, dtype='float32')
+            out['video'] = video.transpose((3, 0, 1, 2))
+
+        out['name'] = video_name
+        out['id'] = idx
+
+        return out
+
+
+
+if __name__ == "__main__":
+
+    import yaml
+    import torchvision
+
+
+    with open('config/fashion.yaml') as f:
+        # config = yaml.load(f)
+        config = yaml.safe_load(f)
+        print (config['train_params'])
+    dataset = MultiViewFramesDataset(is_train=True, **config['dataset_params'], N_views = 4)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size = 1, num_workers = 0)
+    for x in dataloader:
+        print (len(x['source']))
+        exit()
+    exit()
+
+
+    #video_frames = FramesDataset(is_train = True, **video_config['dataset_params'])
+    train_transforms = torchvision.transforms.Compose([
+                        torchvision.transforms.RandomHorizontalFlip(),
+                        torchvision.transforms.Resize(256),
+                        torchvision.transforms.ColorJitter(brightness=0.1,
+                            contrast=0.1,
+                            saturation=0.1,
+                            hue=0.1),
+                        torchvision.transforms.ToTensor()
+                        ])
+
+    # root_dir = '../cfpd_data/clean_image/'
+    #root_dir = '/image_data/data/abby-rebeccataylor/images'
+    root_dir = 'data/fashion_png/train'
+    customer_dataset = CustomerDataset(root_dir=root_dir, is_train = True, is_ubc=True,transforms=train_transforms)
+    for x in customer_dataset:
+        print (x)
+    exit()
+    dataloader = torch.utils.data.DataLoader(video_frames, batch_size = 1, num_workers = 0)
+    for x in dataloader:
+        print (x['driving'])
+        print (x['source'])

@@ -160,7 +160,8 @@ class ReconstructionModel(torch.nn.Module):
             if torch.cuda.is_available():
                 self.vgg = self.vgg.cuda()
 
-    def forward(self, x):
+    def forward(self, x, is_ssl=False):
+
         source_region_params = self.region_predictor(x['source'])
         driving_region_params = self.region_predictor(x['driving'])
 
@@ -171,7 +172,10 @@ class ReconstructionModel(torch.nn.Module):
 
         loss_values = {}
 
-        pyramide_real = self.pyramid(x['driving'])
+        if not is_ssl:
+            pyramide_real = self.pyramid(x['driving'])
+        else:
+            pyramide_real = self.pyramid(x['source'])
         pyramide_generated = self.pyramid(generated['prediction'])
 
         if sum(self.loss_weights['perceptual']) != 0:

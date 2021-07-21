@@ -5,4 +5,10 @@ __pycache__/
 data/
 video-preprocessing/
 log/
-
+*.png
+*.jpg
+ssl/
+finetuning/
+web/
+checkpoints/
+bruteforce_results/

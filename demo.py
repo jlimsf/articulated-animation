@@ -120,23 +120,28 @@ def make_animation(source_image, driving_video, generator, region_predictor, avd
 
 def main(opt):
     source_image = imageio.imread(opt.source_image)
-    reader = imageio.get_reader(opt.driving_video)
-    fps = reader.get_meta_data()['fps']
-    reader.close()
-    driving_video = imageio.mimread(opt.driving_video, memtest=False)
+
 
     source_image = resize(source_image, opt.img_shape)[..., :3]
-    driving_video = [resize(frame, opt.img_shape)[..., :3] for frame in driving_video]
-    # with open('driving_video.pickle', 'wb') as f:
-        # pickle.dump(driving_video, f)
 
-    #with open('driving_video.pickle', 'rb') as f:
-    #    driving_video = pickle.load(f)
+    if ".pickle" in opt.driving_video:
+        with open(opt.driving_video, 'rb') as f:
+           dat = pickle.load(f)
+           driving_video = dat['video']
+           fps = dat['fps']
+
+    else:
+        reader = imageio.get_reader(opt.driving_video)
+        fps = reader.get_meta_data()['fps']
+        reader.close()
+        driving_video = imageio.mimread(opt.driving_video, memtest=False)
+        driving_video = [resize(frame, opt.img_shape)[..., :3] for frame in driving_video]
+
 
     generator, region_predictor, avd_network = load_checkpoints(config_path=opt.config,
                                                                 checkpoint_path=opt.checkpoint, cpu=opt.cpu)
     predictions = make_animation(source_image, driving_video, generator, region_predictor, avd_network,
-                                 animation_mode='standard', cpu=opt.cpu)
+                                 animation_mode=opt.mode, cpu=opt.cpu)
     imageio.mimsave(opt.result_video, [img_as_ubyte(frame) for frame in predictions], fps=fps)
 
 

@@ -15,6 +15,29 @@ from modules.pixelwise_flow_predictor import PixelwiseFlowPredictor
 import flow_vis
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
+
+def draw_colored_heatmap(heatmap, colormap, bg_color):
+    parts = []
+    weights = []
+    bg_color = np.array(bg_color).reshape((1, 1, 1, 3))
+    num_regions = heatmap.shape[-1]
+    for i in range(num_regions):
+        color = np.array(colormap(i / num_regions))[:3]
+        color = color.reshape((1, 1, 1, 3))
+        part = heatmap[:, :, :, i:(i + 1)]
+        part = part / np.max(part, axis=(1, 2), keepdims=True)
+        weights.append(part)
+
+        color_part = part * color
+        parts.append(color_part)
+
+    weight = sum(weights)
+    bg_weight = 1 - np.minimum(1, weight)
+    weight = np.maximum(1, weight)
+    result = sum(parts) / weight + bg_weight * bg_color
+    return result
+
 
 class Generator(nn.Module):
     """
@@ -108,14 +131,37 @@ class Generator(nn.Module):
         else:
             motion_params = None
 
-
-        # gt_flow = np.load('frame_0001.npy')
-        # this_flow = motion_params['occlusion_map'].squeeze().numpy()
-        # flow_color = flow_vis.flow_to_color(this_flow)
-        # plt.imshow(this_flow)
-        # plt.show()
+        # flow = motion_params['optical_flow'][0].squeeze()
+        # print (flow.shape)
+        # print (flow)
+        # flow_np = flow.detach().cpu().numpy()
+        # flow_im = flow_vis.flow_to_color(flow_np, convert_to_bgr=False)
+        # print (flow_im)
+        # flow_im = Image.fromarray(flow_im)
+        # flow_im.save('flow.png')
         # exit()
-        
+
+        # driving_heatmap = F.interpolate(driving_region_params['heatmap'] , size=(256,256) )
+        # driving_heatmap = np.transpose(driving_heatmap.data.cpu().numpy(), [0, 2, 3, 1])
+        # # driving_heatmap = driving_heatmap[0].squeeze()
+        # driving_heatmap_out = draw_colored_heatmap(driving_heatmap, plt.get_cmap('gist_rainbow'), np.array((0,0,0)))
+        #
+        # source_heatmap = F.interpolate(source_region_params['heatmap'], size=(256,256) )
+        # source_heatmap = np.transpose(source_heatmap.data.cpu().numpy(), [0, 2, 3, 1])
+        # # source_heatmap = source_heatmap[0].squeeze()
+        # source_heatmap_out = draw_colored_heatmap(source_heatmap, plt.get_cmap('gist_rainbow'), np.array((0,0,0)))
+        #
+        # src_hm = (255 * source_heatmap_out[0] ).astype(np.uint8)
+        # drv_hm = (255 * driving_heatmap_out[0] ).astype(np.uint8)
+        # print ( src_hm.shape, drv_hm.shape)
+        # src_hm_im = Image.fromarray(src_hm)
+        # drv_hm_im = Image.fromarray(drv_hm)
+        # src_hm_im.save('src_hm.png')
+        # drv_hm_im.save('drv_hm.png')
+        #
+        # exit()
+
+
         out = self.apply_optical(input_previous=None, input_skip=out, motion_params=motion_params)
 
         out = self.bottleneck(out)
