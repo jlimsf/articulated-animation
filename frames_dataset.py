@@ -12,7 +12,7 @@ from skimage import io, img_as_float32
 from skimage.color import gray2rgb
 from skimage.transform import resize
 
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 from imageio import mimread
 
 import numpy as np
@@ -114,7 +114,7 @@ class FramesDataset(Dataset):
             self.transform = AllAugmentationTransform(**augmentation_params)
         else:
             self.transform = None
-        
+
 
     def __len__(self):
         return len(self.videos)

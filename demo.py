@@ -30,10 +30,33 @@ from animate import get_animation_region_params
 import torch.nn.functional as F
 import torch
 import matplotlib.pyplot as plt
+from PIL import Image
 
 
 if sys.version_info[0] < 3:
     raise Exception("You must use Python 3 or higher. Recommended version is Python 3.7")
+
+def draw_colored_heatmap(heatmap, colormap, bg_color):
+    parts = []
+    weights = []
+    bg_color = np.array(bg_color).reshape((1, 1, 1, 3))
+    num_regions = heatmap.shape[-1]
+    for i in range(num_regions):
+        color = np.array(colormap(i / num_regions))[:3]
+        color = color.reshape((1, 1, 1, 3))
+        part = heatmap[:, :, :, i:(i + 1)]
+        part = part / np.max(part, axis=(1, 2), keepdims=True)
+        weights.append(part)
+
+        color_part = part * color
+        parts.append(color_part)
+
+    weight = sum(weights)
+    bg_weight = 1 - np.minimum(1, weight)
+    weight = np.maximum(1, weight)
+    result = sum(parts) / weight + bg_weight * bg_color
+    return result
+
 
 def load_checkpoints(config_path, checkpoint_path, cpu=False):
     with open(config_path) as f:
@@ -91,17 +114,14 @@ def make_animation(source_image, driving_video, generator, region_predictor, avd
         source_region_params = region_predictor(source)
         driving_region_params_initial = region_predictor(driving[:, :, 0])
 
-
-        # src_heatmaps = source_region_params['heatmap'].squeeze()
-        # src_heatmaps = driving_region_params_initial['heatmap'].squeeze()
-        # for src_heatmap in src_heatmaps:
-        #     src_heatmap_np = src_heatmap.numpy()
-        #     plt.imshow(src_heatmap_np)
-        #     plt.show()
+        # source_heatmap = source_region_params['heatmap']
+        # source_heatmap = F.interpolate(source_heatmap, size=(256,256))
+        # source_heatmap = np.transpose(source_heatmap.data.numpy(), [0, 2, 3, 1])
+        # heatmap_color = draw_colored_heatmap(source_heatmap, plt.get_cmap('gist_rainbow'), (0,0,0) ).squeeze()
         #
+        # heatmap_im = Image.fromarray((heatmap_color* 255).astype(np.uint8))
+        # heatmap_im.save("source_heatmap.jpeg")
         # exit()
-
-
 
         for frame_idx in tqdm(range(driving.shape[2])):
             driving_frame = driving[:, :, frame_idx]
@@ -115,6 +135,16 @@ def make_animation(source_image, driving_video, generator, region_predictor, avd
             out = generator(source, source_region_params=source_region_params, driving_region_params=new_region_params)
 
             predictions.append(np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0])
+
+            # heatmap = driving_region_params['heatmap']
+            # heatmap = F.interpolate(heatmap, size=(256,256))
+            # heatmap = np.transpose(heatmap.data.numpy(), [0, 2, 3, 1])
+            # heatmap_color = draw_colored_heatmap(heatmap, plt.get_cmap('gist_rainbow'), (0,0,0) ).squeeze()
+            #
+            # heatmap_im = Image.fromarray((heatmap_color* 255).astype(np.uint8))
+            # heatmap_im.save("driving_heatmaps/driving_{:03}.jpeg".format(frame_idx))
+
+
     return predictions
 
 
@@ -123,12 +153,16 @@ def main(opt):
     reader = imageio.get_reader(opt.driving_video)
     fps = reader.get_meta_data()['fps']
     reader.close()
-    # driving_video = imageio.mimread(opt.driving_video, memtest=False)
+    driving_video = imageio.mimread(opt.driving_video, memtest=False)
 
     source_image = resize(source_image, opt.img_shape)[..., :3]
+    # print (source_image)
+    # s_im = Image.fromarray((source_image* 255).astype(np.uint8))
+    # s_im.save("OOD_Sample.png")
+    # exit()
     # driving_video = [resize(frame, opt.img_shape)[..., :3] for frame in driving_video]
     # with open('driving_video.pickle', 'wb') as f:
-        # pickle.dump(driving_video, f)
+    #     pickle.dump(driving_video, f)
 
     with open('driving_video.pickle', 'rb') as f:
         driving_video = pickle.load(f)
